@@ -1,0 +1,1 @@
+var split = require('./index');
