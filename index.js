@@ -1,7 +1,9 @@
-var _ = require('lodash');
-var waveform = require('waveform-node');
-var ffmpeg = require('fluent-ffmpeg');
-var Heap = require('heap');
+const fs        = require('fs'),
+      _         = require('lodash'),
+      waveform  = require('waveform-node'),
+      ffmpeg    = require('fluent-ffmpeg'),
+      Heap      = require('heap'),
+      path      = require('path');
 
 var threshold;
 
@@ -16,7 +18,7 @@ averageFrequency = function (frequencies) {
 calculateThreshold = function (frequencies) {
   return averageFrequency(Heap.nsmallest(frequencies.filter(function (frequency) {
     return frequency > 0;
-  }), 2500));
+  }), frequencies.length / 2));
 };
 
 // Trims background noise from start and end of clip
@@ -42,8 +44,9 @@ trimClip = function (frequencies) {
   return {start, end}
 };
 
-generateSubclips = function (splits, path, clipLength, callback) {
+generateSubclips = function (splits, filepath, clipLength, callback) {
   let subclipsGenerated = 0;
+  let subclipPaths = [];
   for (let i = -1; i < splits.length; i++) {
     let startTime, duration;
     if (i === -1) {
@@ -56,19 +59,20 @@ generateSubclips = function (splits, path, clipLength, callback) {
       startTime = splits[i];
       duration = splits[i + 1] - splits[i];
     }
-    let splitPath = path.split('.');
-    ffmpeg(__dirname + '/' + path)
+    let splitPath = filepath.split('.');
+    ffmpeg(path.join(__dirname, filepath))
       .setStartTime(startTime)
       .setDuration(duration)
       .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
       .audioCodec('copy')
 
       .on('error', function (err) {
-        console.log('An error occurred: ' + err.message);
+        callback(err);
       })
       .on('end', function () {
+        subclipPaths.push(splitPath[0] + `-${i + 1}.` + splitPath[1]);
         if (++subclipsGenerated === splits.length + 1) {
-          callback(null, subclipsGenerated);
+          callback(null, subclipPaths);
         }
       })
       .run();
@@ -76,19 +80,26 @@ generateSubclips = function (splits, path, clipLength, callback) {
 };
 
 
-module.exports = function (params) {
-  let {path, minClipLength} = params;
-
-  ffmpeg.ffprobe(__dirname + '/' + path, function (err, metadata) {
+module.exports = function (params, callback) {
+  let {filepath, minClipLength} = params;
+  ffmpeg(path.join(__dirname, filepath)).ffprobe( function (err, metadata) {
+    if (err) {
+      callback(err);
+      return;
+    }
     let clipLength = metadata.format.duration;
-    minClipLength = minClipLength ? minClipLength : 5
+    if (clipLength < minClipLength) { // return original clip
+      callback(null, [filepath]);
+      return;
+    }
+    minClipLength = minClipLength ? minClipLength : 5;
     let numOfSample = 5000;
     let samplesPerSecond = numOfSample / clipLength;
     let stepSize = samplesPerSecond / 10;
-    let options = {numOfSample};
-    waveform.getWaveForm(__dirname + '/' + path, options, function (error, frequencies) {
-      if (error) {
-        console.log(error);
+    let options = { numOfSample };
+    waveform.getWaveForm(path.join(__dirname, filepath), options, function (err, frequencies) {
+      if (err) {
+        callback(err);
         return;
       }
 
@@ -104,15 +115,14 @@ module.exports = function (params) {
         }
 
       }
-      let secondSplits = _.map(sampleSplits, (freq) => {
-          return (freq / frequencies.length) * clipLength
-    })
-      generateSubclips(secondSplits, path, clipLength, function (err, subclipsGenerated) {
+      let secondSplits = _.map(sampleSplits, (frequency) => {
+          return (frequency / frequencies.length) * clipLength
+    });
+      generateSubclips(secondSplits, filepath, clipLength, function (err, subclipPaths) {
         if (err) {
-          console.log(err);
+          callback(err);
         } else {
-          console.log(`Generated ${subclipsGenerated} subclips`);
-          return subclipsGenerated;
+          callback(null, subclipPaths);
         }
       })
     });
