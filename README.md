@@ -17,12 +17,12 @@ npm install audio-split
 var split = require('audio-split');
 
 split({
-  path: 'path/to/file.mp4',
+  filepath: 'path/to/file.mp4',
   minClipLength: 5
 });
 ```
 
 ## Parameters
 
-- `path` (String, required)
-- `minClipLength` (float, optional)
+- `filepath` (String, required)
+- `minClipLength` (float, optional, default 5)
