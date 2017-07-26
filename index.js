@@ -2,8 +2,7 @@ const fs        = require('fs'),
       _         = require('lodash'),
       waveform  = require('waveform-node'),
       ffmpeg    = require('fluent-ffmpeg'),
-      Heap      = require('heap'),
-      path      = require('path');
+      Heap      = require('heap')
 
 var threshold;
 
@@ -60,12 +59,10 @@ generateSubclips = function (splits, filepath, clipLength, callback) {
       duration = splits[i + 1] - splits[i];
     }
     let splitPath = filepath.split('.');
-    ffmpeg(path.join(__dirname, filepath))
+    ffmpeg(filepath)
       .setStartTime(startTime)
       .setDuration(duration)
       .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
-      .audioCodec('copy')
-
       .on('error', function (err) {
         callback(err);
       })
@@ -79,10 +76,16 @@ generateSubclips = function (splits, filepath, clipLength, callback) {
   }
 };
 
-
 module.exports = function (params, callback) {
   let {filepath, minClipLength} = params;
-  ffmpeg(path.join(__dirname, filepath)).ffprobe( function (err, metadata) {
+  ffmpeg(filepath).audioCodec('pcm_s16le').on('end', function(data) {
+    console.log(data);
+  }).on('error', function() {
+    console.log('asdlokignasdkl')
+  })
+
+  callback = callback || function () {};
+  ffmpeg(filepath).ffprobe( function (err, metadata) {
     if (err) {
       callback(err);
       return;
@@ -97,7 +100,7 @@ module.exports = function (params, callback) {
     let samplesPerSecond = numOfSample / clipLength;
     let stepSize = samplesPerSecond / 10;
     let options = { numOfSample };
-    waveform.getWaveForm(path.join(__dirname, filepath), options, function (err, frequencies) {
+    waveform.getWaveForm(filepath, options, function (err, frequencies) {
       if (err) {
         callback(err);
         return;
