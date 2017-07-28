@@ -1,8 +1,8 @@
 const fs        = require('fs'),
       _         = require('lodash'),
-      waveform  = require('waveform-node'),
       ffmpeg    = require('fluent-ffmpeg'),
       Heap      = require('heap')
+const waveform  = require('./streaming_waveform.js')
 
 var threshold;
 
@@ -100,7 +100,10 @@ module.exports = function (params, callback) {
     let samplesPerSecond = numOfSample / clipLength;
     let stepSize = samplesPerSecond / 10;
     let options = { numOfSample };
-    waveform.getWaveForm(filepath, options, function (err, frequencies) {
+
+    // streaming version of this
+    waveform(filepath, numOfSample).then((frequencies) => {
+
       if (err) {
         callback(err);
         return;
@@ -128,6 +131,7 @@ module.exports = function (params, callback) {
           callback(null, subclipPaths);
         }
       })
-    });
+    })
+
   });
 };
