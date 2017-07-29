@@ -43,7 +43,8 @@ trimClip = function (frequencies) {
   return {start, end}
 };
 
-generateSubclips = function (splits, filepath, clipLength, callback) {
+
+generateSubclips = async function (splits, filepath, clipLength, callback) {
   let subclipsGenerated = 0;
   let subclipPaths = [];
   for (let i = -1; i < splits.length; i++) {
@@ -59,7 +60,8 @@ generateSubclips = function (splits, filepath, clipLength, callback) {
       duration = splits[i + 1] - splits[i];
     }
     let splitPath = filepath.split('.');
-    ffmpeg(filepath)
+    await new Promise(function(resolve, reject) {
+      ffmpeg(filepath)
       .setStartTime(startTime)
       .setDuration(duration)
       .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
@@ -71,9 +73,11 @@ generateSubclips = function (splits, filepath, clipLength, callback) {
         if (++subclipsGenerated === splits.length + 1) {
           callback(null, subclipPaths);
         }
+        return resolve();
       })
       .run();
-  }
+
+  })}
 };
 
 module.exports = function (params, callback) {
