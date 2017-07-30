@@ -19,6 +19,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "bluebird": "^3.5.0",
     "fluent-ffmpeg": "^2.1.2",
     "heap": "^0.2.6",
     "lodash": "^4.17.4",
