@@ -19,6 +19,7 @@ var split = require('audio-split');
 split({
   filepath: 'path/to/file.mp4',
   minClipLength: 5
+  maxClipLength: 10
 });
 ```
 
@@ -26,3 +27,4 @@ split({
 
 - `filepath` (String, required)
 - `minClipLength` (float, optional, default 5)
+- `maxClipLength` (float, optional, default minClipLength + 5)
