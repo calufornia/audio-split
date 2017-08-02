@@ -1,8 +1,8 @@
-const fs        = require('fs'),
-      _         = require('lodash'),
-      ffmpeg    = require('fluent-ffmpeg'),
-      Heap      = require('heap')
-const waveform  = require('./streaming_waveform.js')
+const fs = require('fs'),
+  _ = require('lodash'),
+  ffmpeg = require('fluent-ffmpeg'),
+  Heap = require('heap')
+const waveform = require('./streaming_waveform.js')
 
 var threshold;
 
@@ -51,21 +51,22 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
   if (!splits || !splits.length || splits.length === 0) {
     let splitPath = filepath.split('.');
     subclipPaths.push(splitPath[0] + `-0.` + splitPath[1]);
-    await new Promise(function(resolve, reject) {
+    await new Promise(function (resolve, reject) {
       ffmpeg_instance
-      .output(splitPath[0] + `-0.` + splitPath[1])
-      .on('error', function (err) {
-        callback(err);
-      })
-      .on('end', function () {
-        if (subclipPaths.length === splits.length + 1) {
-          callback(null, subclipPaths);
-        }
-        return resolve();
-      })
-      .run();
+        .output(splitPath[0] + `-0.` + splitPath[1])
+        .on('error', function (err) {
+          callback(err);
+        })
+        .on('end', function () {
+          if (subclipPaths.length === splits.length + 1) {
+            callback(null, subclipPaths);
+          }
+          return resolve();
+        })
+        .run();
     });
   }
+
   console.log(splits);
 
   for (let i = -1; i < splits.length; i++) {
@@ -85,25 +86,25 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
     let splitPath = filepath.split('.');
 
     ffmpeg_instance
-    .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
-    .seek(startTime)
-    .setDuration(duration);
+      .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
+      .seek(startTime)
+      .setDuration(duration);
 
     subclipPaths.push(splitPath[0] + `-${i + 1}.` + splitPath[1]);
 
     if (i % 10 === 0 || i === splits.length - 1) {
-      await new Promise(function(resolve, reject) {
+      await new Promise(function (resolve, reject) {
         ffmpeg_instance
-        .on('error', function (err) {
-          callback(err);
-        })
-        .on('end', function () {
-          if (subclipPaths.length === splits.length + 1) {
-            callback(null, subclipPaths);
-          }
-          return resolve();
-        })
-        .run();
+          .on('error', function (err) {
+            callback(err);
+          })
+          .on('end', function () {
+            if (subclipPaths.length === splits.length + 1) {
+              callback(null, subclipPaths);
+            }
+            return resolve();
+          })
+          .run();
       });
       ffmpeg_instance = ffmpeg(filepath);
     }
@@ -114,16 +115,22 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
 };
 
 module.exports = function (params, callback) {
-  let {filepath, minClipLength} = params;
+  let {filepath, minClipLength, maxClipLength} = params;
+  minClipLength = minClipLength ? minClipLength : 5;
+  maxClipLength = maxClipLength ? maxClipLength : 10;
+  callback = callback || function () {
+    };
 
-  callback = callback || function () {};
-  ffmpeg(filepath).ffprobe( function (err, metadata) {
+  if (minClipLength > maxClipLength) {
+    callback('Minimum clip length cannot be greater than maximum clip length.');
+  }
+
+  ffmpeg(filepath).ffprobe(function (err, metadata) {
     if (err) {
       callback(err);
       return;
     }
     let clipLength = metadata.format.duration;
-    minClipLength = minClipLength ? minClipLength : 5;
     let numOfSample = 5000;
     let samplesPerSecond = numOfSample / clipLength;
     let stepSize = samplesPerSecond / 10;
@@ -139,17 +146,36 @@ module.exports = function (params, callback) {
 
       // let {start, end} = trimClip(frequencies);
       let sampleSplits = [];
-      for (let i = minClipLength * samplesPerSecond; i + stepSize < frequencies.length - minClipLength * samplesPerSecond; i += stepSize) {
+      let lastSplit = minClipLength * samplesPerSecond;
+      let quietestSecond = minClipLength * samplesPerSecond;
+      let quietestFreq = averageFrequency(frequencies.slice(quietestSecond, quietestSecond + stepSize));
+      for (let i = minClipLength * samplesPerSecond; i + stepSize < frequencies.length - minClipLength * samplesPerSecond; i += stepSize) { // iterating through frequency space
         let segment = frequencies.slice(i, i + stepSize);
-        if (averageFrequency(segment) <= threshold) {
+        let avgFreq = averageFrequency(segment);
+
+        if (avgFreq <= threshold) {
           sampleSplits.push(i + stepSize / 2);
+          lastSplit = i;
           i += minClipLength * samplesPerSecond;
+          quietestSecond = i;
+          quietestFreq = averageFrequency(frequencies.slice(i, i + stepSize));
+        } else if ((i - lastSplit) > maxClipLength * samplesPerSecond) {
+          sampleSplits.push(quietestSecond + stepSize / 2);
+          lastSplit = quietestSecond;
+          i = quietestSecond + minClipLength * samplesPerSecond;
+          quietestSecond = i;
+          quietestFreq = averageFrequency(frequencies.slice(i, i + stepSize));
+        }
+
+        if (avgFreq < quietestFreq) {
+          quietestFreq = avgFreq;
+          quietestSecond = i;
         }
 
       }
       let secondSplits = _.map(sampleSplits, (frequency) => {
-          return (frequency / frequencies.length) * clipLength
-    });
+        return (frequency / frequencies.length) * clipLength
+      });
       generateSubclips(secondSplits, filepath, clipLength, function (err, subclipPaths) {
         if (err) {
           callback(err);
