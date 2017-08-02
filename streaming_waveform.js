@@ -1,3 +1,5 @@
+/* Derived from waveform-node package. */
+
 var Promise = require('bluebird');
 var fs = require('fs');
 var _ = require('lodash')
@@ -69,8 +71,6 @@ module.exports = Promise.coroutine(function*(filepath, numOfSample) {
 
     ffmpeg.stderr.on('end', function() {
       if (gotData) {
-        console.log(total)
-        console.log("DONE")
         resolve(total)
       }
       resolve(0)
@@ -153,6 +153,5 @@ module.exports = Promise.coroutine(function*(filepath, numOfSample) {
       resolve(peaks)
     });
   });
-  console.log(frequencies)
   return frequencies
 })

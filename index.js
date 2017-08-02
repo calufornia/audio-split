@@ -45,10 +45,32 @@ trimClip = function (frequencies) {
 
 
 generateSubclips = async function (splits, filepath, clipLength, callback) {
-  let subclipsGenerated = 0;
   let subclipPaths = [];
+  let ffmpeg_instance = ffmpeg(filepath);
+
+  if (!splits || !splits.length || splits.length === 0) {
+    let splitPath = filepath.split('.');
+    subclipPaths.push(splitPath[0] + `-0.` + splitPath[1]);
+    await new Promise(function(resolve, reject) {
+      ffmpeg_instance
+      .output(splitPath[0] + `-0.` + splitPath[1])
+      .on('error', function (err) {
+        callback(err);
+      })
+      .on('end', function () {
+        if (subclipPaths.length === splits.length + 1) {
+          callback(null, subclipPaths);
+        }
+        return resolve();
+      })
+      .run();
+    });
+  }
+  console.log(splits);
+
   for (let i = -1; i < splits.length; i++) {
     let startTime, duration;
+
     if (i === -1) {
       startTime = 0;
       duration = splits[0];
@@ -59,34 +81,40 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
       startTime = splits[i];
       duration = splits[i + 1] - splits[i];
     }
-    let splitPath = filepath.split('.');
-    await new Promise(function(resolve, reject) {
-      ffmpeg(filepath)
-      .setStartTime(startTime)
-      .setDuration(duration)
-      .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
-      .on('error', function (err) {
-        callback(err);
-      })
-      .on('end', function () {
-        subclipPaths.push(splitPath[0] + `-${i + 1}.` + splitPath[1]);
-        if (++subclipsGenerated === splits.length + 1) {
-          callback(null, subclipPaths);
-        }
-        return resolve();
-      })
-      .run();
 
-  })}
+    let splitPath = filepath.split('.');
+
+    ffmpeg_instance
+    .output(splitPath[0] + `-${i + 1}.` + splitPath[1])
+    .seek(startTime)
+    .setDuration(duration);
+
+    subclipPaths.push(splitPath[0] + `-${i + 1}.` + splitPath[1]);
+
+    if (i % 10 === 0 || i === splits.length - 1) {
+      await new Promise(function(resolve, reject) {
+        ffmpeg_instance
+        .on('error', function (err) {
+          callback(err);
+        })
+        .on('end', function () {
+          if (subclipPaths.length === splits.length + 1) {
+            callback(null, subclipPaths);
+          }
+          return resolve();
+        })
+        .run();
+      });
+      ffmpeg_instance = ffmpeg(filepath);
+    }
+
+
+  }
+
 };
 
 module.exports = function (params, callback) {
   let {filepath, minClipLength} = params;
-  ffmpeg(filepath).audioCodec('pcm_s16le').on('end', function(data) {
-    console.log(data);
-  }).on('error', function() {
-    console.log('asdlokignasdkl')
-  })
 
   callback = callback || function () {};
   ffmpeg(filepath).ffprobe( function (err, metadata) {
@@ -95,19 +123,13 @@ module.exports = function (params, callback) {
       return;
     }
     let clipLength = metadata.format.duration;
-    if (clipLength < minClipLength) { // return original clip
-      callback(null, [filepath]);
-      return;
-    }
     minClipLength = minClipLength ? minClipLength : 5;
     let numOfSample = 5000;
     let samplesPerSecond = numOfSample / clipLength;
     let stepSize = samplesPerSecond / 10;
-    let options = { numOfSample };
 
     // streaming version of this
     waveform(filepath, numOfSample).then((frequencies) => {
-
       if (err) {
         callback(err);
         return;
@@ -115,9 +137,9 @@ module.exports = function (params, callback) {
 
       threshold = calculateThreshold(frequencies);
 
-      let {start, end} = trimClip(frequencies);
+      // let {start, end} = trimClip(frequencies);
       let sampleSplits = [];
-      for (let i = start + minClipLength * samplesPerSecond; i + stepSize < end - minClipLength * samplesPerSecond; i += stepSize) {
+      for (let i = minClipLength * samplesPerSecond; i + stepSize < frequencies.length - minClipLength * samplesPerSecond; i += stepSize) {
         let segment = frequencies.slice(i, i + stepSize);
         if (averageFrequency(segment) <= threshold) {
           sampleSplits.push(i + stepSize / 2);
