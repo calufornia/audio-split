@@ -117,7 +117,7 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
 module.exports = function (params, callback) {
   let {filepath, minClipLength, maxClipLength} = params;
   minClipLength = minClipLength ? minClipLength : 5;
-  maxClipLength = maxClipLength ? maxClipLength : 10;
+  maxClipLength = maxClipLength ? maxClipLength : (minClipLength + 5);
   callback = callback || function () {
     };
 
