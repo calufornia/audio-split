@@ -1,6 +1,6 @@
 {
   "name": "audio-split",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Slice audio file into subclips",
   "main": "index.js",
   "scripts": {
