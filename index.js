@@ -67,8 +67,6 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
     });
   }
 
-  console.log(splits);
-
   for (let i = -1; i < splits.length; i++) {
     let startTime, duration;
 
