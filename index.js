@@ -20,30 +20,6 @@ calculateThreshold = function (frequencies) {
   }), frequencies.length / 2));
 };
 
-// Trims background noise from start and end of clip
-trimClip = function (frequencies) {
-  let start = 0;
-  let end = frequencies.length;
-  for (let i = 0; i < frequencies.length; i++) {
-    if (frequencies[i] <= threshold) {
-      start = i;
-    } else {
-      break;
-    }
-  }
-
-  for (let i = frequencies.length - 1; i >= 0; i--) {
-    if (frequencies[i] <= threshold) {
-      end = i;
-    } else {
-      break;
-    }
-  }
-
-  return {start, end}
-};
-
-
 generateSubclips = async function (splits, filepath, clipLength, callback) {
   let subclipPaths = [];
   let ffmpeg_instance = ffmpeg(filepath);
@@ -88,7 +64,7 @@ generateSubclips = async function (splits, filepath, clipLength, callback) {
       .seek(startTime)
       .setDuration(duration);
 
-    subclipPaths.push(splitPath[0] + `-${i + 1}.` + splitPath[1]);
+    subclipPaths.push({startTime, endTime: startTime + duration, filepath: splitPath[0] + `-${i + 1}.` + splitPath[1]});
 
     if (i % 10 === 0 || i === splits.length - 1) {
       await new Promise(function (resolve, reject) {
@@ -142,7 +118,6 @@ module.exports = function (params, callback) {
 
       threshold = calculateThreshold(frequencies);
 
-      // let {start, end} = trimClip(frequencies);
       let sampleSplits = [];
       let lastSplit = minClipLength * samplesPerSecond;
       let quietestSecond = minClipLength * samplesPerSecond;
